@@ -55,7 +55,7 @@ class Client(Node):
             self.cfg.graph.rank,
             self.cfg.graph.ranks_with_blocks[self.cfg.graph.rank],
             platform.node(),
-            'GPU' if (self.cfg.device.on_cuda and torch.cuda.is_available()) else 'CPU',
+            self.cfg.device.type,
             self.cfg.graph.device
             ),
         debug=self.cfg.graph.debug)
@@ -66,8 +66,6 @@ class Client(Node):
         # If the data is not downloaded, for the first time the server only needs to download the data
         if self.cfg.graph.rank == 0:
             data_loader = build_dataset_from_config(self.cfg, split='train')
-            del data_loader
-            data_loader = get_dataset(self.args, self.args.data, self.args.data_dir, split='test')
             del data_loader
         dist.barrier(group=self.all_clients_group)
 
