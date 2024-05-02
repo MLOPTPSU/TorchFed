@@ -11,7 +11,7 @@ from fedtorch.comms.trainings.federated import (train_and_validate_federated_cen
                                                 train_and_validate_drfa_centered,
                                                 train_and_validate_afl_centered,
                                                 train_and_validate_perfedme_centered)
-from fedtorch.nodes import ClientCentered, ServerCentered
+from fedtorch.nodes import Client, ClientCentered, ServerCentered
 
 
 def main(args):

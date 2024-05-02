@@ -3,10 +3,10 @@ from copy import deepcopy
 from datetime import datetime
 
 
-def deepcopy_model(args, model):
+def deepcopy_model(cfg, model):
     # copy model parameters and attach its gradient as well
     tmp_model = deepcopy(model)
-    if args.track_model_aggregation:
+    if cfg.checkpoint.track_model_aggregation:
         for tmp_para, para in zip(tmp_model.parameters(), model.parameters()):
             tmp_para.grad = para.grad.clone()
     return tmp_model

@@ -15,19 +15,19 @@ def qffl_aggregation_centered(OnlineClients, Server, online_clients, lr):
         for i, (server_param, client_param) in enumerate(zip(Server.model.parameters(), OnlineClients[o].model.parameters())):
             # get model difference.
             param_diff = (server_param.data - client_param.data) * \
-                            ( np.float_power(OnlineClients[o].full_loss + 1e-10, Server.args.qffl_q) / lr )
+                            ( np.float_power(OnlineClients[o].full_loss + 1e-10, Server.cfg.federated.qffl_q) / lr )
             server_param.grad.data.add_(param_diff)
-            h += Server.args.qffl_q * np.float_power(OnlineClients[o].full_loss + 1e-10, Server.args.qffl_q-1.0) * \
+            h += Server.cfg.federated.qffl_q * np.float_power(OnlineClients[o].full_loss + 1e-10, Server.cfg.federated.qffl_q-1.0) * \
                 param_diff.norm().pow(2).item()
-        h += np.float_power(OnlineClients[o].full_loss + 1e-10, Server.args.qffl_q) / lr
+        h += np.float_power(OnlineClients[o].full_loss + 1e-10, Server.cfg.federated.qffl_q) / lr
 
     for server_param in Server.model.parameters():
         server_param.grad.data.div_(h+1e-10)
 
     Server.optimizer.step(
         apply_lr=False,
-        scale=Server.args.lr_scale_at_sync,
+        scale=Server.cfg.lr.lr_scale_at_sync,
         apply_in_momentum=False,
-        apply_out_momentum=Server.args.out_momentum,
+        apply_out_momentum=Server.cfg.training.out_momentum,
     ) 
     return 

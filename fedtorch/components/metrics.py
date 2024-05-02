@@ -5,9 +5,9 @@ from fedtorch.comms.algorithms.distributed import global_average
 from fedtorch.logs.meter import AverageMeter
 
 
-def define_metrics(args, model):
-    if 'least_square' not in args.arch:
-        if args.arch not in ['rnn']:
+def define_metrics(cfg, model):
+    if 'least_square' not in cfg.model.type:
+        if cfg.model.type not in ['rnn']:
             if model.num_classes >= 5:
                 return (1, 5)
             else:
@@ -61,7 +61,7 @@ def accuracy(output, target, topk=(1,), rnn=False):
             correct = pred.eq(target.view(1, -1).expand_as(pred))
 
             for k in topk:
-                correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+                correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
                 res.append(correct_k.mul_(100.0 / batch_size).item())
         else:
             res += [0]

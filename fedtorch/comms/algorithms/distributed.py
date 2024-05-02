@@ -14,16 +14,16 @@ from fedtorch.comms.utils.flow_utils import (quantize_tensor,
                                              decompress_tensor)
 
 """the frequency of communication"""
-def configure_sync_scheme(args):
-    args.local_steps = define_sync_freq(
-        num_epochs=args.num_epochs,
-        local_step=args.local_step,
-        local_step_warmup_type=args.local_step_warmup_type,
-        local_step_warmup_period=args.local_step_warmup_period,
-        turn_on_local_step_from=args.turn_on_local_step_from,
-        turn_off_local_step_from=args.turn_off_local_step_from,
-        warmup_per_intervals=args.local_step_warmup_per_interval,
-        lr_change_epochs=args.lr_change_epochs)
+def configure_sync_scheme(cfg):
+    cfg.training.local_steps = define_sync_freq(
+        num_epochs=cfg.training.num_epochs,
+        local_step=cfg.training.local_step,
+        local_step_warmup_type=cfg.training.local_step_warmup_type,
+        local_step_warmup_period=cfg.training.local_step_warmup_period,
+        turn_on_local_step_from=cfg.training.turn_on_local_step_from,
+        turn_off_local_step_from=cfg.training.turn_off_local_step_from,
+        warmup_per_intervals=cfg.training.local_step_warmup_per_interval,
+        lr_change_epochs=getattr(cfg.lr.scheduler, 'lr_change_epochs', None))
 
 def define_sync_freq(
         num_epochs, local_step, local_step_warmup_type,
@@ -105,7 +105,7 @@ def define_sync_freq(
         raise NotImplementedError
     return steps
 
-def aggregate_gradients(args, old_model, model, optimizer, is_sync):
+def aggregate_gradients(cfg, old_model, model, optimizer, is_sync):
     """Aggregate gradients.
 
     Each local model first gets the difference between current model and
@@ -114,7 +114,7 @@ def aggregate_gradients(args, old_model, model, optimizer, is_sync):
     The previous synchronized model could be either from block/global sync,
     and the all-reduce range (group), can also be determined by sync status.
 
-    We have a flag, i.e., args.avg_model, to determine if we want to average
+    We have a flag, i.e., cfg.training.avg_model, to determine if we want to average
     these gradients/difference or simply sum them up.
     """
     for old_param, param in zip(old_model.parameters(), model.parameters()):
@@ -125,20 +125,20 @@ def aggregate_gradients(args, old_model, model, optimizer, is_sync):
         # all reduce.
         dist.all_reduce(param.grad.data, op=dist.ReduceOp.SUM)
         # if or not averge the model.
-        if args.avg_model:
-            param.grad.data /= float(args.graph.n_nodes)
+        if getattr(cfg.training, 'avg_model', False):
+            param.grad.data /= float(cfg.graph.n_nodes)
 
     # apply gradient again.
     # Note that when use local SGD, is_global is True for each aggregation.
     optimizer.step(
         apply_lr=False,
-        scale=args.lr_scale_at_sync,
+        scale=cfg.lr.lr_scale_at_sync,
         apply_in_momentum=False,
-        apply_out_momentum=args.out_momentum,
+        apply_out_momentum=cfg.training.out_momentum,
     )
 
     # reassign model to old_model.
-    old_model = deepcopy_model(args, model)
+    old_model = deepcopy_model(cfg, model)
     return old_model
 
 

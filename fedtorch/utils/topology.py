@@ -60,6 +60,7 @@ class FCGraph(UndirectedGraph):
         self._blocks = [int(l) for l in blocks.split(',')]
         self._on_cuda = on_cuda
         self._world = world
+        self.debug = True
 
     @property
     def n_nodes(self):

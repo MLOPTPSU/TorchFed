@@ -1,0 +1,9 @@
+checkpoint=dict(
+    debug=False,
+    resume=None,
+    track_model_aggregation=False,
+    root='./checkpoint/',
+    checkpoint_index=None,
+    save_all_models=False,
+    save_some_models='1,29,59',
+)

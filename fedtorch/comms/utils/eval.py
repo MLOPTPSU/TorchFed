@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
+from copy import deepcopy
 
 from fedtorch.components.metrics import accuracy, accuracy_per_class
 from fedtorch.logs.logging import (log, 
@@ -11,7 +12,7 @@ from fedtorch.logs.meter import (define_val_tracker,
                                  evaluate_gloabl_performance, 
                                  evaluate_local_performance, 
                                  define_per_class_acc_tracker)
-from fedtorch.components.dataset import _load_data_batch
+from fedtorch.components.dataset_builder import _load_data_batch
 from fedtorch.logs.checkpoint import save_to_checkpoint
 
 def inference(model, criterion, metrics, _input, _target, classes=None, rnn=False):
@@ -28,17 +29,24 @@ def inference(model, criterion, metrics, _input, _target, classes=None, rnn=Fals
         return loss, performance, (acc_per_class, count_per_class)
     return loss, performance
 
-def inference_personal(model1, model2, alpha, criterion, metrics, _input, _target):
+def inference_personal(model1, model2, alpha, criterion, metrics, _input, _target, model_avg=False):
     """Inference on the given model and get loss and accuracy."""
     # TODO: merge with inference
-    output1 = model1(_input)
-    output2 = model2(_input)
-    output = alpha * output1 + (1-alpha) * output2
+    if model_avg:
+        for p1, p2 in zip(model1.parameters(), model2.parameters()):
+            # Multiply p1 byalpha and p2 by 1-alpha
+            p1.data.mul_(alpha)
+            p1.data.add_(p2.data, alpha=1-alpha)
+        output = model1(_input)
+    else:
+        output1 = model1(_input)
+        output2 = model2(_input)
+        output = alpha * output1 + (1-alpha) * output2
     loss = criterion(output, _target)
     performance = accuracy(output.data, _target, topk=metrics)
     return loss, performance
 
-def do_validate(args, 
+def do_validate(cfg, 
                 model, 
                 optimizer, 
                 criterion, 
@@ -56,11 +64,11 @@ def do_validate(args,
     model_mode = 'personal' if personal or local else 'global'
 
     tracker = define_val_tracker()
-    if 'robust' in args.arch:
+    if getattr(cfg.model, 'robust', False):
         tmp_noise = torch.clone(model.noise.data)
         # model.noise.data = torch.randn(tmp_noise.shape) * 0.1
         for _input, _target in data_loader:
-            _input, _target = _load_data_batch(args, _input, _target)
+            _input, _target = _load_data_batch(cfg, _input, _target)
             loss, performance = inference(model, criterion, metrics, _input, _target)
             grad = torch.autograd.grad(loss, model.noise)[0]
             model.noise.data.add_(grad,alpha=0.01)
@@ -74,15 +82,15 @@ def do_validate(args,
         if model_personal is None:
             raise ValueError("model_personal should not be None for personalized mode for APFL!")
         model_personal.eval()
-        # log('Do validation on the personal models.', args.debug)
+        # log('Do validation on the personal models.', cfg.graph.debug)
     # else:
     #     if local:
-    #         log('Do validation on the client models.', args.debug)
+    #         log('Do validation on the client models.', cfg.graph.debug)
     #     else:
-    #         log('Do validation on the global model.', args.debug)
+    #         log('Do validation on the global model.', cfg.graph.debug)
     for _input, _target in data_loader:
         # load data and check performance.
-        _input, _target = _load_data_batch(args, _input, _target)
+        _input, _target = _load_data_batch(cfg, _input, _target)
 
         # Skip batches with one sample because of BatchNorm issue in some models!
         if _input.size(0)==1:
@@ -98,8 +106,8 @@ def do_validate(args,
             tracker = update_performancec_tracker(
                 tracker, loss, performance, _input.size(0))
     # if local and not val:
-    #     print("loss in rank {} is {}".format(args.graph.rank,tracker['losses'].avg))
-    # log('Aggregate val performance from different clients.', args.debug)
+    #     print("loss in rank {} is {}".format(cfg.graph.rank,tracker['losses'].avg))
+    # log('Aggregate val performance from different clients.', cfg.graph.debug)
     if len(metrics) == 1:
         tracker['top5'].count = 1.0
         tracker['top5'].sum = 0.0
@@ -115,36 +123,39 @@ def do_validate(args,
         ]
 
 
-    logging_display_val(args,performance, mode=data_mode, personal=model_mode=='personal')
+    logging_display_val(cfg,performance, mode=data_mode, personal=model_mode=='personal')
 
     if data_mode == 'test' and not personal:
         # remember best prec@1 and save checkpoint.
-        args.cur_prec1 = performance[0]
-        is_best = args.cur_prec1 > args.best_prec1
+        cfg.cur_prec1 = performance[0]
+        is_best = cfg.cur_prec1 > cfg.best_prec1
         if is_best:
-            args.best_prec1 = performance[0]
-            args.best_epoch += [args.epoch_]
+            cfg.best_prec1 = performance[0]
+            cfg.best_epoch += [cfg.epoch_]
 
         # logging and display val info.
-        logging_display_test_summary(args, debug=args.debug)
+        logging_display_test_summary(cfg, debug=cfg.graph.debug)
         # save to the checkpoint.
-        if args.graph.rank == 0:
+        if cfg.graph.rank == 0:
+            tb_writer = cfg.pop('tb_writer', None)
             save_to_checkpoint({
-                'arguments': args,
-                'current_epoch': args.epoch,
-                'local_index': args.local_index,
-                'global_index': args.global_index,
-                'arch': args.arch,
+                'arguments': cfg,
+                'current_epoch': cfg.epoch,
+                'local_index': cfg.local_index,
+                'global_index': cfg.global_index,
+                'arch': cfg.model.type,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
-                'best_prec1': args.best_prec1,
+                'best_prec1': cfg.best_prec1,
                 },
-                is_best, dirname=args.checkpoint_root,
+                is_best, dirname=cfg.checkpoint.root,
                 filename='checkpoint.pth.tar',
-                save_all=args.save_all_models)
+                save_all=cfg.checkpoint.save_all_models)
+            cfg.tb_writer = tb_writer
+
     
 
 
-    if 'robust' in args.arch:
+    if getattr(cfg.model, 'robust', False):
         model.noise.data = tmp_noise
     return performance

@@ -2,8 +2,10 @@ import math
 import torch
 from torch.optim.optimizer import Optimizer
 
+from ..optimizer_builder import OPTIMIZER
 
-class AdamW(Optimizer):
+@OPTIMIZER.register_module()
+class Adam(Optimizer):
     """Implements Adam algorithm.
 
     It has been proposed in `Adam: A Method for Stochastic Optimization`_.
@@ -38,14 +40,14 @@ class AdamW(Optimizer):
             raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
         defaults = dict(lr=lr, betas=betas, eps=eps,
                         weight_decay=weight_decay, correct_wd=correct_wd)
-        super(AdamW, self).__init__(params, defaults)
+        super(Adam, self).__init__(params, defaults)
 
     def __setstate__(self, state):
-        super(AdamW, self).__setstate__(state)
+        super(Adam, self).__setstate__(state)
         for group in self.param_groups:
             group.setdefault('correct_wd', False)
 
-    def step(self, closure=None, apply_lr=True, scale=1.0, **kargs):
+    def step(self, closure=None, apply_lr=True, scale=1.0, **kwargs):
         """Performs a single optimization step.
 
         Arguments:

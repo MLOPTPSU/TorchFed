@@ -2,7 +2,9 @@
 import torch
 from torch.optim.optimizer import Optimizer, required
 
+from ..optimizer_builder import OPTIMIZER
 
+@OPTIMIZER.register_module()
 class SGD(Optimizer):
     r"""Implements stochastic gradient descent (optionally with momentum).
 
@@ -65,7 +67,7 @@ class SGD(Optimizer):
             group.setdefault('nesterov', False)
 
     def step(self, closure=None, apply_lr=True, scale=1.0,
-             apply_in_momentum=True, apply_out_momentum=False, **kargs):
+             apply_in_momentum=True, apply_out_momentum=False, **kwargs):
         """Performs a single optimization step.
 
         Avoid to use momentum to accumulate the gradients from other workers.

@@ -6,45 +6,45 @@ import torch
 
 
 SCALE_QUANTIZE, ZERO_POINT_QUANTIZE, DTYPE_QUANTIZE = 0.001, 0, torch.qint8
-def get_current_epoch(args):
-    if args.growing_batch_size:
-        args.epoch_ = args.local_data_seen / args.num_samples_per_epoch
+def get_current_epoch(cfg):
+    if cfg.partitioner.type == 'GrowingBatchPartitioner':
+        cfg.epoch_ = cfg.local_data_seen / cfg.num_samples_per_epoch
     else:
-        args.epoch_ = args.local_index / args.num_batches_train_per_device_per_epoch
-    args.epoch = int(args.epoch_)
+        cfg.epoch_ = cfg.local_index / cfg.num_batches_train_per_device_per_epoch
+    cfg.epoch = int(cfg.epoch_)
 
 
-def get_current_local_step(args):
+def get_current_local_step(cfg):
     """design a specific local step adjustment schme based on lr_decay_by_epoch
     """
     try:
-        return args.local_steps[args.epoch]
+        return cfg.training.local_steps[cfg.epoch]
     except:
-        return args.local_steps[-1]
+        return cfg.training.local_steps[-1]
 
 
-def is_stop(args):
-    if args.stop_criteria == 'epoch':
-        return args.epoch >= args.num_epochs
-    elif args.stop_criteria == 'iteration':
-        return args.local_index >= args.num_iterations_per_worker
+def is_stop(cfg):
+    if cfg.training.stop_criteria == 'epoch':
+        return cfg.epoch >= cfg.training.num_epochs
+    elif cfg.training.stop_criteria == 'iteration':
+        return cfg.local_index >= cfg.num_iterations_per_worker
 
 
-def is_sync_fed(args):
-    if args.federated_sync_type == 'local_step':
-        local_step = get_current_local_step(args)
-        return args.local_index % local_step == 0
-    elif args.federated_sync_type == 'epoch':
-        return args.epoch_ % args.num_epochs_per_comm == 0
+def is_sync_fed(cfg):
+    if cfg.federated.sync_type == 'local_step':
+        local_step = get_current_local_step(cfg)
+        return cfg.local_index % local_step == 0
+    elif cfg.federated.sync_type == 'epoch':
+        return cfg.epoch_ % cfg.training.num_epochs_per_comm == 0
     else:
         raise NotImplementedError
 
-def is_sync_fed_robust(args):
-    local_step = get_current_local_step(args)
-    return args.local_index % local_step**2 == 0
+def is_sync_fed_robust(cfg):
+    local_step = get_current_local_step(cfg)
+    return cfg.local_index % local_step**2 == 0
 
-def update_client_epoch(args):
-    args.client_epoch_total += args.local_index / args.num_batches_train_per_device_per_epoch
+def update_client_epoch(cfg):
+    cfg.client_epoch_total += cfg.local_index / cfg.num_batches_train_per_device_per_epoch
     return
 
 
@@ -85,7 +85,7 @@ def euclidean_proj_simplex(v, s=1):
     u = torch.flip(torch.sort(v)[0],dims=(0,))
     cssv = torch.cumsum(u,dim=0)
     # get the number of > 0 components of the optimal solution
-    non_zero_vector = torch.nonzero(u * torch.arange(1, n+1) > (cssv - s), as_tuple=False)
+    non_zero_vector = torch.nonzero(u * torch.arange(1, n+1).to(u.device) > (cssv - s), as_tuple=False)
     if len(non_zero_vector) == 0:
         rho=0.0
     else:
@@ -248,3 +248,14 @@ def alpha_update(model_local, model_personal,alpha, eta):
     alpha_n = alpha - eta*grad_alpha
     alpha_n = np.clip(alpha_n.item(),0.0,1.0)
     return alpha_n
+
+def projection_simplex_tensor(U, dim=0):
+    if len(U.shape) != 2:
+        raise ValueError("The matrix should be 2D!")
+    if dim == 0:
+        for i in range(len(U)):
+            U[i,:] = euclidean_proj_simplex(U[i,:])
+    elif dim ==1:
+        for j in range(len(U[0,:])):
+            U[:,j] = euclidean_proj_simplex(U[:,j])
+    return U

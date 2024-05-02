@@ -3,8 +3,8 @@ import os
 import shutil
 
 
-def get_current_path(args, rank):
-    paths = args.resume.split(',')
+def get_current_path(cfg, rank):
+    paths = cfg.checkpoint.resume.split(',')
     splited_paths = map(
         lambda p: p.split('/')[-1].split('-')[: 1], paths)
     splited_paths_dict = dict([

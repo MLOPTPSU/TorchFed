@@ -13,12 +13,12 @@ def record(content, path):
 log_path = None
 
 
-def configure_log(args=None):
+def configure_log(cfg=None):
     global log_path
 
-    if args is not None:
+    if cfg is not None:
         log_path = os.path.join(
-            args.checkpoint_dir, 'record' + str(args.graph.rank))
+            cfg.checkpoint.checkpoint_dir, 'record' + str(cfg.graph.rank))
     else:
         log_path = os.path.join(os.getcwd(), "record")
 
@@ -46,14 +46,14 @@ def setup_logging(log_file='log.txt'):
     return logging
 
 
-def log_args(args, debug=True):
+def log_cfgs(cfg, debug=True):
     log('parameters: ', debug=debug)
-    for arg in vars(args):
-        log(str(arg) + '\t' + str(getattr(args, arg)), debug=debug)
+    for arg in vars(cfg):
+        log(str(arg) + '\t' + str(getattr(cfg, arg)), debug=debug)
     for name in ['n_nodes', 'world', 'rank',
                  'ranks_with_blocks', 'blocks_with_ranks',
                  'device', 'on_cuda', 'get_neighborhood']:
-        log('{}: {}'.format(name, getattr(args.graph, name)), debug=debug)
+        log('{}: {}'.format(name, getattr(cfg.graph, name)), debug=debug)
 
 
 def logging_computing(tracker, loss, performance, _input, lr):
@@ -80,10 +80,10 @@ def logging_globally(tracker, start_global_time):
     tracker['global_time'].update(time.time() - start_global_time)
 
 
-def logging_display_training(args, tracker):
+def logging_display_training(cfg, tracker):
     log_info = 'Epoch: {epoch:.3f}. Local index: {local_index}. Load: {load:.3f}s | Data: {data:.3f}s | Computing: {computing_time:.3f}s | Sync: {sync_time:.3f}s | Global: {global_time:.3f}s | Loss: {loss:.4f} | top1: {top1:.4f} | top5: {top5:.4f} | learning_rate: {lr:.4f} | rounds_comm: {rounds_comm}'.format(
-        epoch=args.epoch_,
-        local_index=args.local_index,
+        epoch=cfg.epoch_,
+        local_index=cfg.local_index,
         load=tracker['load_time'].avg,
         data=tracker['data_time'].avg,
         computing_time=tracker['computing_time'].avg,
@@ -93,36 +93,41 @@ def logging_display_training(args, tracker):
         top1=tracker['top1'].avg,
         top5=tracker['top5'].avg,
         lr=tracker['learning_rate'].val,
-        rounds_comm=args.rounds_comm)
-    log('Process {}: '.format(args.graph.rank) + log_info, debug=args.debug)
+        rounds_comm=cfg.rounds_comm)
+    log('Process {}: '.format(cfg.graph.rank) + log_info, debug=cfg.graph.debug)
 
-def logging_display_val(args,performance, mode, personal=False):
+def logging_display_val(cfg,performance, mode, personal=False):
     #TODO:improve this method
     if mode == 'test':
         if personal:
             log('Test at personal model at batch: {}. Epoch: {}. Process: {}. Prec@1: {:.3f} Prec@5: {:.3f} Loss: {:.3f} Comm: {}'.format(
-                args.local_index, args.epoch, args.graph.rank, performance[0], performance[1], performance[2], args.rounds_comm),
-                debug=args.debug)
+                cfg.local_index, cfg.epoch, cfg.graph.rank, performance[0], performance[1], performance[2], cfg.rounds_comm),
+                debug=cfg.graph.debug)
         else:
             log('Test at batch: {}. Epoch: {}. Process: {}. Prec@1: {:.3f} Prec@5: {:.3f} Loss: {:.3f} Comm: {}'.format(
-                args.local_index, args.epoch, args.graph.rank, performance[0], performance[1], performance[2], args.rounds_comm),
-                debug=args.debug)
+                cfg.local_index, cfg.epoch, cfg.graph.rank, performance[0], performance[1], performance[2], cfg.rounds_comm),
+                debug=cfg.graph.debug)
     else:
         pretext = []
         pretext.append('Personal' if personal else 'Global')
         pretext.append('validation' if mode=='validation' else 'train')
 
         log('{} performance for {} at batch: {}. Epoch: {}. Process: {}. Prec@1: {:.3f} Prec@5: {:.3f} Loss: {:.3f} Comm: {}'.format(
-            pretext[0], pretext[1], args.local_index, args.epoch, args.graph.rank, performance[0], performance[1], performance[2], args.rounds_comm),
-            debug=args.debug)
+            pretext[0], pretext[1], cfg.local_index, cfg.epoch, cfg.graph.rank, performance[0], performance[1], performance[2], cfg.rounds_comm),
+            debug=cfg.graph.debug)
+    
+    if cfg.graph.rank == 0:
+        model_mode = 'Local' if personal else 'Global'
+        cfg.tb_writer.add_scalar('{}/{}/Loss'.format(model_mode, mode), performance[2], cfg.rounds_comm)
+        cfg.tb_writer.add_scalar('{}/{}/Acc'.format(model_mode, mode), performance[0], cfg.rounds_comm)
 
 
-def logging_display_test_summary(args,debug=True):
+def logging_display_test_summary(cfg,debug=True):
     log('best accuracy for rank {} at local index {} \
         (best epoch {:.3f}, current epoch {:.3f}): {}.'.format(
-        args.graph.rank, args.local_index,
-        args.best_epoch[-1] if len(args.best_epoch) != 0 else 0.0,
-        args.epoch_, args.best_prec1), debug=debug)
+        cfg.graph.rank, cfg.local_index,
+        cfg.best_epoch[-1] if len(cfg.best_epoch) != 0 else 0.0,
+        cfg.epoch_, cfg.best_prec1), debug=debug)
 
 
 def update_performancec_tracker(tracker, loss, performance, size):

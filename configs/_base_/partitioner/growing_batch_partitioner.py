@@ -1,0 +1,9 @@
+partitioner=dict(
+    type='GrowingBatchPartitioner',
+    data=None, 
+    shuffle=False, 
+    sizes=None, 
+    num_epochs=10, 
+    distributed=True, 
+    reshuffle_per_epoch=False
+)

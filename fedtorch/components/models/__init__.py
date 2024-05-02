@@ -1,12 +1,12 @@
-from fedtorch.components.models.convex.least_square import *
-from fedtorch.components.models.convex.logistic_regression import *
-from fedtorch.components.models.convex.robust_least_square import *
-from fedtorch.components.models.convex.robust_logistic_regression import *
+from fedtorch.components.models.regression import Least_square
+from fedtorch.components.models.logistic_regression import LogisticRegression
+from fedtorch.components.models.lenet import Lenet
+from fedtorch.components.models.mlp import MLP
+from fedtorch.components.models.densenet import DenseNet
+from fedtorch.components.models.resnet import ResNet_imagenet, ResNet_cifar
+from fedtorch.components.models.rnn import RNN
+from fedtorch.components.models.wideresnet import WideResNet
 
-from fedtorch.components.models.nonconvex.resnet import *
-from fedtorch.components.models.nonconvex.densenet import *
-from fedtorch.components.models.nonconvex.wideresnet import *
-from fedtorch.components.models.nonconvex.mlp import *
-from fedtorch.components.models.nonconvex.rnn import *
-from fedtorch.components.models.nonconvex.robust_mlp import *
-from fedtorch.components.models.nonconvex.cnn import *
+__all__ = ['Least_square', 'LogisticRegression', 'Lenet', 
+           'MLP', 'DenseNet', 'ResNet_imagenet', 'ResNet_cifar', 
+           'RNN', 'WideResNet']

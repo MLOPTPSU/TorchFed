@@ -11,11 +11,11 @@ def qsparse_aggregation_centered(OnlineClients, Server, online_clients, local_st
     Server.optimizer.zero_grad()
     num_online_clients = len(online_clients)
     if lambda_weight is None:
-        # rank_weight =  OnlineClient.args.num_samples_per_epoch / OnlineClient.args.train_dataset_size
+        # rank_weight =  OnlineClient.cfg.data.num_samples_per_epoch / OnlineClient.cfg.data.train_dataset_size
         rank_weight =  1.0 / num_online_clients
     else:
         #TODO: This is experimental. Test it.
-        rank_weight = lambda_weight * Server.args.graph.n_nodes / num_online_clients
+        rank_weight = lambda_weight * Server.cfg.graph.n_nodes / num_online_clients
 
     
     for o in online_clients:
@@ -23,7 +23,7 @@ def qsparse_aggregation_centered(OnlineClients, Server, online_clients, local_st
             # get model difference.
             param_diff = (server_param.data - client_param.data) * rank_weight
             g = param_diff + memory_param.data * rank_weight
-            grad_v, grad_i, grad_s = compress_tensor(g, r=Server.args.compressed_ratio, comp_type='topk')
+            grad_v, grad_i, grad_s = compress_tensor(g, r=Server.cfg.federated.compressed_ratio, comp_type='topk')
             grad_decomp = decompress_tensor(grad_v, grad_i, grad_s)
             server_param.grad.data.add_(grad_decomp)
 
@@ -40,8 +40,8 @@ def qsparse_aggregation_centered(OnlineClients, Server, online_clients, local_st
     # apply gradient again.
     Server.optimizer.step(
         apply_lr=False,
-        scale=Server.args.lr_scale_at_sync,
+        scale=Server.cfg.lr.lr_scale_at_sync,
         apply_in_momentum=False,
-        apply_out_momentum=Server.args.out_momentum,
+        apply_out_momentum=Server.cfg.training.out_momentum,
     )
     return 
